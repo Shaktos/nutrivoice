@@ -1,0 +1,1305 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="theme-color" content="#0a0a0a">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <title>NutriVoice</title>
+    <link rel="manifest" href="data:application/json;base64,eyJuYW1lIjoiTnV0cmlWb2ljZSIsInNob3J0X25hbWUiOiJOdXRyaVZvaWNlIiwic3RhcnRfdXJsIjoiLiIsImRpc3BsYXkiOiJzdGFuZGFsb25lIiwiYmFja2dyb3VuZF9jb2xvciI6IiMwYTBhMGEiLCJ0aGVtZV9jb2xvciI6IiMwYTBhMGEifQ==">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Syne:wght@400;600;800&display=swap');
+        
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        :root {
+            --bg: #0a0a0a;
+            --surface: #1a1a1a;
+            --surface-elevated: #252525;
+            --text: #ffffff;
+            --text-secondary: #a0a0a0;
+            --accent: #00ff88;
+            --accent-dim: #00cc6a;
+            --error: #ff3366;
+            --warning: #ffaa00;
+            --protein: #ff6b9d;
+            --carbs: #ffd93d;
+            --fat: #6bcfff;
+        }
+
+        body {
+            font-family: 'Space Mono', monospace;
+            background: var(--bg);
+            color: var(--text);
+            overflow-x: hidden;
+            min-height: 100vh;
+            padding-bottom: 80px;
+        }
+
+        .app-header {
+            padding: 24px 20px;
+            background: linear-gradient(180deg, var(--bg) 0%, transparent 100%);
+            position: sticky;
+            top: 0;
+            z-index: 100;
+            backdrop-filter: blur(20px);
+        }
+
+        .app-title {
+            font-family: 'Syne', sans-serif;
+            font-weight: 800;
+            font-size: 32px;
+            letter-spacing: -0.02em;
+            background: linear-gradient(135deg, var(--accent) 0%, var(--text) 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .mode-switcher {
+            display: flex;
+            gap: 8px;
+            margin-top: 16px;
+            background: var(--surface);
+            padding: 4px;
+            border-radius: 12px;
+        }
+
+        .mode-btn {
+            flex: 1;
+            padding: 12px;
+            background: transparent;
+            border: none;
+            color: var(--text-secondary);
+            font-family: 'Space Mono', monospace;
+            font-size: 12px;
+            font-weight: 700;
+            text-transform: uppercase;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            letter-spacing: 0.05em;
+        }
+
+        .mode-btn.active {
+            background: var(--accent);
+            color: var(--bg);
+            box-shadow: 0 0 20px rgba(0, 255, 136, 0.3);
+        }
+
+        .content {
+            padding: 0 20px;
+            max-width: 600px;
+            margin: 0 auto;
+        }
+
+        .voice-panel {
+            background: var(--surface);
+            border-radius: 24px;
+            padding: 32px 24px;
+            margin-top: 24px;
+            border: 1px solid rgba(255, 255, 255, 0.05);
+        }
+
+        .mic-button {
+            width: 120px;
+            height: 120px;
+            border-radius: 50%;
+            background: var(--accent);
+            border: none;
+            cursor: pointer;
+            position: relative;
+            margin: 0 auto;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            box-shadow: 0 8px 32px rgba(0, 255, 136, 0.3);
+        }
+
+        .mic-button:active {
+            transform: scale(0.95);
+        }
+
+        .mic-button.listening {
+            animation: pulse 1.5s ease-in-out infinite;
+            background: var(--error);
+            box-shadow: 0 8px 32px rgba(255, 51, 102, 0.5);
+        }
+
+        @keyframes pulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.05); }
+        }
+
+        .mic-icon {
+            width: 40px;
+            height: 40px;
+            fill: var(--bg);
+        }
+
+        .transcript {
+            margin-top: 24px;
+            padding: 20px;
+            background: var(--bg);
+            border-radius: 16px;
+            min-height: 80px;
+            font-size: 14px;
+            line-height: 1.6;
+            color: var(--text-secondary);
+            border: 1px dashed rgba(255, 255, 255, 0.1);
+        }
+
+        .transcript.has-content {
+            color: var(--text);
+            border-color: var(--accent);
+        }
+
+        .confirmation-panel {
+            background: var(--surface-elevated);
+            border-radius: 20px;
+            padding: 24px;
+            margin-top: 20px;
+            border: 2px solid var(--accent);
+            animation: slideIn 0.3s ease;
+        }
+
+        @keyframes slideIn {
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .confirmation-title {
+            font-family: 'Syne', sans-serif;
+            font-weight: 600;
+            font-size: 18px;
+            margin-bottom: 16px;
+            color: var(--accent);
+        }
+
+        .food-item {
+            background: var(--surface);
+            padding: 16px;
+            border-radius: 12px;
+            margin-bottom: 12px;
+        }
+
+        .food-name {
+            font-weight: 700;
+            font-size: 16px;
+            margin-bottom: 8px;
+        }
+
+        .macros {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 8px;
+            margin-top: 8px;
+            font-size: 11px;
+        }
+
+        .macro {
+            text-align: center;
+            padding: 8px;
+            background: var(--bg);
+            border-radius: 8px;
+        }
+
+        .macro-value {
+            display: block;
+            font-weight: 700;
+            font-size: 14px;
+            margin-bottom: 2px;
+        }
+
+        .macro.cal { color: var(--accent); }
+        .macro.pro { color: var(--protein); }
+        .macro.carb { color: var(--carbs); }
+        .macro.fat { color: var(--fat); }
+
+        .action-buttons {
+            display: flex;
+            gap: 12px;
+            margin-top: 20px;
+        }
+
+        .btn {
+            flex: 1;
+            padding: 16px;
+            border: none;
+            border-radius: 12px;
+            font-family: 'Space Mono', monospace;
+            font-weight: 700;
+            font-size: 14px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        .btn-confirm {
+            background: var(--accent);
+            color: var(--bg);
+        }
+
+        .btn-confirm:active {
+            transform: scale(0.98);
+            background: var(--accent-dim);
+        }
+
+        .btn-cancel {
+            background: var(--surface);
+            color: var(--text-secondary);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .daily-summary {
+            background: linear-gradient(135deg, var(--surface) 0%, var(--surface-elevated) 100%);
+            border-radius: 24px;
+            padding: 24px;
+            margin-top: 24px;
+            border: 1px solid rgba(255, 255, 255, 0.05);
+        }
+
+        .summary-header {
+            font-family: 'Syne', sans-serif;
+            font-weight: 600;
+            font-size: 14px;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            color: var(--text-secondary);
+            margin-bottom: 16px;
+        }
+
+        .total-calories {
+            font-family: 'Syne', sans-serif;
+            font-weight: 800;
+            font-size: 48px;
+            line-height: 1;
+            margin-bottom: 4px;
+            background: linear-gradient(135deg, var(--accent) 0%, var(--text) 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .calories-label {
+            font-size: 12px;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+        }
+
+        .macro-breakdown {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 12px;
+            margin-top: 20px;
+        }
+
+        .macro-card {
+            background: var(--bg);
+            padding: 16px;
+            border-radius: 12px;
+            text-align: center;
+        }
+
+        .macro-card-value {
+            font-weight: 700;
+            font-size: 24px;
+            margin-bottom: 4px;
+        }
+
+        .macro-card-label {
+            font-size: 10px;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            opacity: 0.7;
+        }
+
+        .meals-list {
+            margin-top: 24px;
+        }
+
+        .meal-entry {
+            background: var(--surface);
+            padding: 16px;
+            border-radius: 16px;
+            margin-bottom: 12px;
+            border-left: 4px solid var(--accent);
+        }
+
+        .meal-time {
+            font-size: 11px;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            margin-bottom: 8px;
+        }
+
+        .meal-items {
+            font-size: 13px;
+            line-height: 1.6;
+        }
+
+        .status-message {
+            position: fixed;
+            bottom: 90px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: var(--surface-elevated);
+            padding: 12px 24px;
+            border-radius: 24px;
+            font-size: 12px;
+            border: 1px solid var(--accent);
+            animation: slideUp 0.3s ease;
+            z-index: 1000;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+            max-width: 90%;
+            text-align: center;
+        }
+
+        .debug-panel {
+            background: var(--surface);
+            border: 1px solid var(--warning);
+            border-radius: 12px;
+            padding: 12px;
+            margin-top: 16px;
+            font-size: 10px;
+            color: var(--warning);
+            font-family: 'Space Mono', monospace;
+        }
+
+        .debug-line {
+            padding: 4px 0;
+            border-bottom: 1px dashed rgba(255, 170, 0, 0.2);
+        }
+
+        .debug-line:last-child {
+            border-bottom: none;
+        }
+
+        @keyframes slideUp {
+            from {
+                opacity: 0;
+                transform: translate(-50%, 20px);
+            }
+            to {
+                opacity: 1;
+                transform: translate(-50%, 0);
+            }
+        }
+
+        .hidden {
+            display: none !important;
+        }
+
+        .loading {
+            display: inline-block;
+            width: 16px;
+            height: 16px;
+            border: 2px solid var(--surface);
+            border-top-color: var(--accent);
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        .database-panel {
+            margin-top: 24px;
+        }
+
+        .section-title {
+            font-family: 'Syne', sans-serif;
+            font-weight: 600;
+            font-size: 18px;
+            margin-bottom: 16px;
+            color: var(--accent);
+        }
+
+        .food-database-item {
+            background: var(--surface);
+            padding: 16px;
+            border-radius: 12px;
+            margin-bottom: 8px;
+            border-left: 3px solid var(--accent-dim);
+        }
+
+        .food-db-name {
+            font-weight: 700;
+            margin-bottom: 8px;
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 40px 20px;
+            color: var(--text-secondary);
+            font-size: 14px;
+        }
+
+        .tab-nav {
+            display: flex;
+            gap: 8px;
+            margin-top: 24px;
+            background: var(--surface);
+            padding: 4px;
+            border-radius: 12px;
+        }
+
+        .tab-btn {
+            flex: 1;
+            padding: 10px;
+            background: transparent;
+            border: none;
+            color: var(--text-secondary);
+            font-family: 'Space Mono', monospace;
+            font-size: 11px;
+            font-weight: 700;
+            text-transform: uppercase;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            letter-spacing: 0.05em;
+        }
+
+        .tab-btn.active {
+            background: var(--bg);
+            color: var(--accent);
+        }
+
+        .tab-content {
+            margin-top: 20px;
+        }
+
+        .install-prompt {
+            background: linear-gradient(135deg, var(--accent) 0%, var(--accent-dim) 100%);
+            color: var(--bg);
+            padding: 20px;
+            border-radius: 16px;
+            margin: 20px;
+            text-align: center;
+        }
+
+        .install-prompt h3 {
+            font-family: 'Syne', sans-serif;
+            font-weight: 800;
+            margin-bottom: 8px;
+        }
+
+        .install-prompt p {
+            font-size: 12px;
+            opacity: 0.9;
+        }
+    </style>
+</head>
+<body>
+    <div class="app-header">
+        <div class="app-title">NutriVoice</div>
+        <div class="mode-switcher">
+            <button class="mode-btn active" data-mode="add-food">+ Aliment</button>
+            <button class="mode-btn" data-mode="log-meal">Repas</button>
+            <button class="mode-btn" data-mode="history">Historique</button>
+        </div>
+    </div>
+
+    <div class="content">
+        <!-- Add Food Mode -->
+        <div class="view" id="add-food-view">
+            <div class="voice-panel">
+                <button class="mic-button" id="mic-add">
+                    <svg class="mic-icon" viewBox="0 0 24 24">
+                        <path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3z"/>
+                        <path d="M17 11c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z"/>
+                    </svg>
+                </button>
+                <div class="transcript" id="transcript-add">
+                    Appuie sur le micro et dicte : "Toast, dans 100g : 130 calories, 5 protéines, 10 glucides, 0 lipides"
+                </div>
+                <div class="debug-panel" id="debug-add"></div>
+            </div>
+            <div id="confirmation-add" class="hidden"></div>
+        </div>
+
+        <!-- Log Meal Mode -->
+        <div class="view hidden" id="log-meal-view">
+            <div class="voice-panel">
+                <button class="mic-button" id="mic-meal">
+                    <svg class="mic-icon" viewBox="0 0 24 24">
+                        <path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3z"/>
+                        <path d="M17 11c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z"/>
+                    </svg>
+                </button>
+                <div class="transcript" id="transcript-meal">
+                    Appuie et dicte : "Ajoute 94g avocat, 4 œufs moyens, beurre 4g"
+                </div>
+                <div class="debug-panel" id="debug-meal"></div>
+            </div>
+            <div id="confirmation-meal" class="hidden"></div>
+            
+            <div class="daily-summary">
+                <div class="summary-header">Aujourd'hui</div>
+                <div class="total-calories" id="daily-calories">0</div>
+                <div class="calories-label">Calories</div>
+                <div class="macro-breakdown">
+                    <div class="macro-card">
+                        <div class="macro-card-value" style="color: var(--protein)" id="daily-protein">0g</div>
+                        <div class="macro-card-label">Protéines</div>
+                    </div>
+                    <div class="macro-card">
+                        <div class="macro-card-value" style="color: var(--carbs)" id="daily-carbs">0g</div>
+                        <div class="macro-card-label">Glucides</div>
+                    </div>
+                    <div class="macro-card">
+                        <div class="macro-card-value" style="color: var(--fat)" id="daily-fat">0g</div>
+                        <div class="macro-card-label">Lipides</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- History Mode -->
+        <div class="view hidden" id="history-view">
+            <div class="tab-nav">
+                <button class="tab-btn active" data-tab="meals">Repas</button>
+                <button class="tab-btn" data-tab="foods">Base données</button>
+            </div>
+
+            <div class="tab-content" id="meals-tab">
+                <div class="meals-list" id="meals-history"></div>
+            </div>
+
+            <div class="tab-content hidden" id="foods-tab">
+                <div class="database-panel">
+                    <div class="section-title">Mes aliments</div>
+                    <div id="food-database"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // ===== STATE =====
+        let currentMode = 'add-food';
+        let isListening = false;
+        let recognition = null;
+        let currentTranscript = '';
+        let pendingConfirmation = null;
+        let recognitionTimeout = null;
+
+        // ===== DEBUG LOGGING =====
+        function logDebug(message) {
+            const debugEl = currentMode === 'add-food' 
+                ? document.getElementById('debug-add')
+                : document.getElementById('debug-meal');
+            
+            const timestamp = new Date().toLocaleTimeString('fr-FR');
+            const line = document.createElement('div');
+            line.className = 'debug-line';
+            line.textContent = `[${timestamp}] ${message}`;
+            debugEl.appendChild(line);
+            
+            // Keep only last 5 messages
+            while (debugEl.children.length > 5) {
+                debugEl.removeChild(debugEl.firstChild);
+            }
+        }
+
+        // ===== SPEECH RECOGNITION SETUP =====
+        if ('webkitSpeechRecognition' in window) {
+            recognition = new webkitSpeechRecognition();
+            recognition.continuous = false;
+            recognition.interimResults = true;
+            recognition.lang = 'fr-FR';
+
+            logDebug('✓ Reconnaissance vocale disponible');
+
+            recognition.onstart = () => {
+                logDebug('🎤 Écoute démarrée...');
+                isListening = true;
+                updateMicButton();
+                
+                // Timeout après 10 secondes si rien n'est dit
+                recognitionTimeout = setTimeout(() => {
+                    logDebug('⏱️ Timeout - arrêt automatique');
+                    if (recognition && isListening) {
+                        recognition.stop();
+                    }
+                }, 10000);
+            };
+
+            recognition.onaudiostart = () => {
+                logDebug('🔊 Audio détecté');
+            };
+
+            recognition.onsoundstart = () => {
+                logDebug('📢 Son capté par le micro');
+            };
+
+            recognition.onspeechstart = () => {
+                logDebug('🗣️ Parole détectée !');
+            };
+
+            recognition.onresult = (event) => {
+                if (recognitionTimeout) {
+                    clearTimeout(recognitionTimeout);
+                }
+
+                const transcript = Array.from(event.results)
+                    .map(result => result[0].transcript)
+                    .join('');
+                
+                currentTranscript = transcript;
+                updateTranscript(transcript);
+                logDebug(`📝 Texte: "${transcript.substring(0, 50)}..."`);
+            };
+
+            recognition.onspeechend = () => {
+                logDebug('🛑 Fin de parole détectée');
+            };
+
+            recognition.onaudioend = () => {
+                logDebug('🔇 Audio terminé');
+            };
+
+            recognition.onend = () => {
+                logDebug('✅ Écoute terminée');
+                
+                if (recognitionTimeout) {
+                    clearTimeout(recognitionTimeout);
+                }
+                
+                isListening = false;
+                updateMicButton();
+                
+                if (currentTranscript) {
+                    logDebug('🤖 Envoi à l\'IA...');
+                    processVoiceInput(currentTranscript);
+                } else {
+                    logDebug('❌ Aucun texte capté');
+                    showStatus('Aucune parole détectée. Réessaie !', 'error');
+                }
+            };
+
+            recognition.onerror = (event) => {
+                logDebug(`❌ ERREUR: ${event.error}`);
+                
+                if (recognitionTimeout) {
+                    clearTimeout(recognitionTimeout);
+                }
+                
+                let errorMsg = 'Erreur de reconnaissance vocale';
+                
+                switch(event.error) {
+                    case 'no-speech':
+                        errorMsg = 'Aucune parole détectée. Parle plus fort !';
+                        logDebug('💡 Conseil: Parle clairement près du micro');
+                        break;
+                    case 'audio-capture':
+                        errorMsg = 'Micro non accessible. Vérifie les permissions.';
+                        logDebug('💡 Vérifie: Paramètres → Micro → Autoriser');
+                        break;
+                    case 'not-allowed':
+                        errorMsg = 'Permission micro refusée';
+                        logDebug('💡 Clique sur le cadenas → Autoriser le micro');
+                        break;
+                    case 'network':
+                        errorMsg = 'Pas de connexion internet';
+                        logDebug('💡 La reconnaissance vocale nécessite internet');
+                        break;
+                    case 'aborted':
+                        errorMsg = 'Reconnaissance interrompue';
+                        break;
+                    default:
+                        errorMsg = `Erreur: ${event.error}`;
+                }
+                
+                showStatus(errorMsg, 'error');
+                isListening = false;
+                updateMicButton();
+            };
+        } else {
+            logDebug('❌ Reconnaissance vocale NON supportée');
+            showStatus('Reconnaissance vocale non supportée sur ce navigateur. Utilise Chrome.', 'error');
+        }
+
+        // ===== STORAGE FUNCTIONS =====
+        async function saveFoodToDatabase(food) {
+            try {
+                const foods = await getFoodDatabase();
+                foods.push(food);
+                await window.storage.set('food_database', JSON.stringify(foods));
+                return true;
+            } catch (error) {
+                console.error('Error saving food:', error);
+                return false;
+            }
+        }
+
+        async function getFoodDatabase() {
+            try {
+                const result = await window.storage.get('food_database');
+                return result ? JSON.parse(result.value) : [];
+            } catch (error) {
+                return [];
+            }
+        }
+
+        async function saveMealEntry(meal) {
+            try {
+                const today = new Date().toISOString().split('T')[0];
+                const key = `meal_${today}_${Date.now()}`;
+                await window.storage.set(key, JSON.stringify(meal));
+                return true;
+            } catch (error) {
+                console.error('Error saving meal:', error);
+                return false;
+            }
+        }
+
+        async function getMealsForDate(date) {
+            try {
+                const prefix = `meal_${date}`;
+                const result = await window.storage.list(prefix);
+                if (!result || !result.keys) return [];
+                
+                const meals = [];
+                for (const key of result.keys) {
+                    const mealData = await window.storage.get(key);
+                    if (mealData) {
+                        meals.push(JSON.parse(mealData.value));
+                    }
+                }
+                return meals.sort((a, b) => b.timestamp - a.timestamp);
+            } catch (error) {
+                console.error('Error getting meals:', error);
+                return [];
+            }
+        }
+
+        // ===== AI PROCESSING =====
+        async function processVoiceInput(transcript) {
+            showStatus('Analyse en cours...');
+            
+            try {
+                if (currentMode === 'add-food') {
+                    await processFoodCreation(transcript);
+                } else if (currentMode === 'log-meal') {
+                    await processMealLogging(transcript);
+                }
+            } catch (error) {
+                console.error('Processing error:', error);
+                showStatus('Erreur lors du traitement', 'error');
+            }
+        }
+
+        async function processFoodCreation(transcript) {
+            const prompt = `Parse cette commande vocale pour créer un aliment dans une base de données nutritionnelle.
+            
+Texte: "${transcript}"
+
+Réponds UNIQUEMENT avec un objet JSON (pas de markdown, pas de backticks) avec cette structure exacte:
+{
+  "name": "nom de l'aliment",
+  "portion": "100g",
+  "calories": nombre,
+  "protein": nombre,
+  "carbs": nombre,
+  "fat": nombre
+}
+
+Si les informations sont manquantes ou incomplètes, mets 0 pour les valeurs manquantes.`;
+
+            const response = await fetch("https://api.anthropic.com/v1/messages", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                },
+                body: JSON.stringify({
+                    model: "claude-sonnet-4-20250514",
+                    max_tokens: 1000,
+                    messages: [
+                        { role: "user", content: prompt }
+                    ],
+                })
+            });
+
+            const data = await response.json();
+            const text = data.content.map(item => item.text || "").join("\n").trim();
+            
+            let parsed;
+            try {
+                parsed = JSON.parse(text);
+            } catch (e) {
+                const jsonMatch = text.match(/\{[\s\S]*\}/);
+                if (jsonMatch) {
+                    parsed = JSON.parse(jsonMatch[0]);
+                } else {
+                    throw new Error('Invalid JSON response');
+                }
+            }
+
+            pendingConfirmation = {
+                type: 'food',
+                data: parsed
+            };
+
+            showFoodConfirmation(parsed);
+        }
+
+        async function processMealLogging(transcript) {
+            const foodDb = await getFoodDatabase();
+            const foodDbText = foodDb.map(f => `${f.name}: ${f.calories}cal, ${f.protein}g protein, ${f.carbs}g carbs, ${f.fat}g fat per ${f.portion}`).join('\n');
+
+            const prompt = `Parse cette commande vocale pour logger un repas.
+
+Texte: "${transcript}"
+
+Base de données d'aliments personnalisés:
+${foodDbText || 'Aucun aliment personnalisé'}
+
+Instructions:
+1. Pour les aliments dans la base de données personnalisée, utilise ces valeurs
+2. Pour les aliments naturels (fruits, légumes, viandes, œufs, etc.), calcule les macros à partir de tes connaissances
+3. Convertis les quantités si nécessaire (ex: "4 œufs moyens" = environ 200g)
+
+Réponds UNIQUEMENT avec un JSON array (pas de markdown, pas de backticks):
+[
+  {
+    "name": "nom de l'aliment",
+    "quantity": "quantité avec unité (ex: 94g, 4 unités)",
+    "calories": nombre total pour cette quantité,
+    "protein": nombre en g,
+    "carbs": nombre en g,
+    "fat": nombre en g,
+    "source": "database" ou "natural"
+  }
+]`;
+
+            const response = await fetch("https://api.anthropic.com/v1/messages", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                },
+                body: JSON.stringify({
+                    model: "claude-sonnet-4-20250514",
+                    max_tokens: 1500,
+                    messages: [
+                        { role: "user", content: prompt }
+                    ],
+                })
+            });
+
+            const data = await response.json();
+            const text = data.content.map(item => item.text || "").join("\n").trim();
+            
+            let parsed;
+            try {
+                parsed = JSON.parse(text);
+            } catch (e) {
+                const jsonMatch = text.match(/\[[\s\S]*\]/);
+                if (jsonMatch) {
+                    parsed = JSON.parse(jsonMatch[0]);
+                } else {
+                    throw new Error('Invalid JSON response');
+                }
+            }
+
+            pendingConfirmation = {
+                type: 'meal',
+                data: parsed
+            };
+
+            showMealConfirmation(parsed);
+        }
+
+        // ===== UI UPDATES =====
+        function showFoodConfirmation(food) {
+            const html = `
+                <div class="confirmation-panel">
+                    <div class="confirmation-title">Confirmer l'aliment</div>
+                    <div class="food-item">
+                        <div class="food-name">${food.name}</div>
+                        <div style="font-size: 12px; color: var(--text-secondary); margin-top: 4px;">
+                            Pour ${food.portion}
+                        </div>
+                        <div class="macros">
+                            <div class="macro cal">
+                                <span class="macro-value">${food.calories}</span>
+                                Cal
+                            </div>
+                            <div class="macro pro">
+                                <span class="macro-value">${food.protein}g</span>
+                                Pro
+                            </div>
+                            <div class="macro carb">
+                                <span class="macro-value">${food.carbs}g</span>
+                                Glu
+                            </div>
+                            <div class="macro fat">
+                                <span class="macro-value">${food.fat}g</span>
+                                Lip
+                            </div>
+                        </div>
+                    </div>
+                    <div class="action-buttons">
+                        <button class="btn btn-cancel" onclick="cancelConfirmation()">Annuler</button>
+                        <button class="btn btn-confirm" onclick="confirmAction()">Ajouter</button>
+                    </div>
+                </div>
+            `;
+            
+            document.getElementById('confirmation-add').innerHTML = html;
+            document.getElementById('confirmation-add').classList.remove('hidden');
+        }
+
+        function showMealConfirmation(items) {
+            const totalCal = items.reduce((sum, item) => sum + item.calories, 0);
+            const totalPro = items.reduce((sum, item) => sum + item.protein, 0);
+            const totalCarbs = items.reduce((sum, item) => sum + item.carbs, 0);
+            const totalFat = items.reduce((sum, item) => sum + item.fat, 0);
+
+            const itemsHtml = items.map(item => `
+                <div class="food-item">
+                    <div class="food-name">${item.name} - ${item.quantity}</div>
+                    <div style="font-size: 11px; color: var(--text-secondary); margin-top: 4px;">
+                        Source: ${item.source === 'database' ? 'Base de données' : 'Calcul IA'}
+                    </div>
+                    <div class="macros">
+                        <div class="macro cal">
+                            <span class="macro-value">${Math.round(item.calories)}</span>
+                            Cal
+                        </div>
+                        <div class="macro pro">
+                            <span class="macro-value">${Math.round(item.protein)}g</span>
+                            Pro
+                        </div>
+                        <div class="macro carb">
+                            <span class="macro-value">${Math.round(item.carbs)}g</span>
+                            Glu
+                        </div>
+                        <div class="macro fat">
+                            <span class="macro-value">${Math.round(item.fat)}g</span>
+                            Lip
+                        </div>
+                    </div>
+                </div>
+            `).join('');
+
+            const html = `
+                <div class="confirmation-panel">
+                    <div class="confirmation-title">Confirmer le repas</div>
+                    ${itemsHtml}
+                    <div class="food-item" style="background: var(--accent); color: var(--bg); margin-top: 12px;">
+                        <div class="food-name">TOTAL</div>
+                        <div class="macros">
+                            <div class="macro cal">
+                                <span class="macro-value">${Math.round(totalCal)}</span>
+                                Cal
+                            </div>
+                            <div class="macro pro">
+                                <span class="macro-value">${Math.round(totalPro)}g</span>
+                                Pro
+                            </div>
+                            <div class="macro carb">
+                                <span class="macro-value">${Math.round(totalCarbs)}g</span>
+                                Glu
+                            </div>
+                            <div class="macro fat">
+                                <span class="macro-value">${Math.round(totalFat)}g</span>
+                                Lip
+                            </div>
+                        </div>
+                    </div>
+                    <div class="action-buttons">
+                        <button class="btn btn-cancel" onclick="cancelConfirmation()">Annuler</button>
+                        <button class="btn btn-confirm" onclick="confirmAction()">Logger</button>
+                    </div>
+                </div>
+            `;
+            
+            document.getElementById('confirmation-meal').innerHTML = html;
+            document.getElementById('confirmation-meal').classList.remove('hidden');
+        }
+
+        async function confirmAction() {
+            if (!pendingConfirmation) return;
+
+            if (pendingConfirmation.type === 'food') {
+                const success = await saveFoodToDatabase(pendingConfirmation.data);
+                if (success) {
+                    showStatus('Aliment ajouté à la base !', 'success');
+                    cancelConfirmation();
+                    refreshFoodDatabase();
+                }
+            } else if (pendingConfirmation.type === 'meal') {
+                const meal = {
+                    timestamp: Date.now(),
+                    items: pendingConfirmation.data,
+                    totals: {
+                        calories: pendingConfirmation.data.reduce((s, i) => s + i.calories, 0),
+                        protein: pendingConfirmation.data.reduce((s, i) => s + i.protein, 0),
+                        carbs: pendingConfirmation.data.reduce((s, i) => s + i.carbs, 0),
+                        fat: pendingConfirmation.data.reduce((s, i) => s + i.fat, 0),
+                    }
+                };
+
+                const success = await saveMealEntry(meal);
+                if (success) {
+                    showStatus('Repas enregistré !', 'success');
+                    cancelConfirmation();
+                    await updateDailySummary();
+                    await refreshMealsHistory();
+                }
+            }
+        }
+
+        function cancelConfirmation() {
+            pendingConfirmation = null;
+            document.getElementById('confirmation-add').classList.add('hidden');
+            document.getElementById('confirmation-meal').classList.add('hidden');
+            document.getElementById('transcript-add').textContent = 'Appuie sur le micro et dicte : "Toast, dans 100g : 130 calories, 5 protéines, 10 glucides, 0 lipides"';
+            document.getElementById('transcript-add').classList.remove('has-content');
+            document.getElementById('transcript-meal').textContent = 'Appuie et dicte : "Ajoute 94g avocat, 4 œufs moyens, beurre 4g"';
+            document.getElementById('transcript-meal').classList.remove('has-content');
+            currentTranscript = '';
+        }
+
+        function updateTranscript(text) {
+            const transcriptEl = currentMode === 'add-food' 
+                ? document.getElementById('transcript-add')
+                : document.getElementById('transcript-meal');
+            
+            transcriptEl.textContent = text;
+            transcriptEl.classList.add('has-content');
+        }
+
+        function updateMicButton() {
+            const micBtn = currentMode === 'add-food'
+                ? document.getElementById('mic-add')
+                : document.getElementById('mic-meal');
+            
+            if (isListening) {
+                micBtn.classList.add('listening');
+            } else {
+                micBtn.classList.remove('listening');
+            }
+        }
+
+        async function updateDailySummary() {
+            const today = new Date().toISOString().split('T')[0];
+            const meals = await getMealsForDate(today);
+            
+            let totalCal = 0, totalPro = 0, totalCarbs = 0, totalFat = 0;
+            
+            meals.forEach(meal => {
+                totalCal += meal.totals.calories;
+                totalPro += meal.totals.protein;
+                totalCarbs += meal.totals.carbs;
+                totalFat += meal.totals.fat;
+            });
+
+            document.getElementById('daily-calories').textContent = Math.round(totalCal);
+            document.getElementById('daily-protein').textContent = Math.round(totalPro) + 'g';
+            document.getElementById('daily-carbs').textContent = Math.round(totalCarbs) + 'g';
+            document.getElementById('daily-fat').textContent = Math.round(totalFat) + 'g';
+        }
+
+        async function refreshMealsHistory() {
+            const today = new Date().toISOString().split('T')[0];
+            const meals = await getMealsForDate(today);
+            
+            const container = document.getElementById('meals-history');
+            
+            if (meals.length === 0) {
+                container.innerHTML = '<div class="empty-state">Aucun repas enregistré aujourd\'hui</div>';
+                return;
+            }
+
+            const html = meals.map(meal => {
+                const time = new Date(meal.timestamp).toLocaleTimeString('fr-FR', { 
+                    hour: '2-digit', 
+                    minute: '2-digit' 
+                });
+                
+                const items = meal.items.map(i => `${i.name} (${i.quantity})`).join(', ');
+                
+                return `
+                    <div class="meal-entry">
+                        <div class="meal-time">${time}</div>
+                        <div class="meal-items">${items}</div>
+                        <div class="macros" style="margin-top: 12px;">
+                            <div class="macro cal">
+                                <span class="macro-value">${Math.round(meal.totals.calories)}</span>
+                                Cal
+                            </div>
+                            <div class="macro pro">
+                                <span class="macro-value">${Math.round(meal.totals.protein)}g</span>
+                                Pro
+                            </div>
+                            <div class="macro carb">
+                                <span class="macro-value">${Math.round(meal.totals.carbs)}g</span>
+                                Glu
+                            </div>
+                            <div class="macro fat">
+                                <span class="macro-value">${Math.round(meal.totals.fat)}g</span>
+                                Lip
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+
+            container.innerHTML = html;
+        }
+
+        async function refreshFoodDatabase() {
+            const foods = await getFoodDatabase();
+            const container = document.getElementById('food-database');
+            
+            if (foods.length === 0) {
+                container.innerHTML = '<div class="empty-state">Aucun aliment dans ta base de données</div>';
+                return;
+            }
+
+            const html = foods.map(food => `
+                <div class="food-database-item">
+                    <div class="food-db-name">${food.name}</div>
+                    <div class="macros">
+                        <div class="macro cal">
+                            <span class="macro-value">${food.calories}</span>
+                            Cal
+                        </div>
+                        <div class="macro pro">
+                            <span class="macro-value">${food.protein}g</span>
+                            Pro
+                        </div>
+                        <div class="macro carb">
+                            <span class="macro-value">${food.carbs}g</span>
+                            Glu
+                        </div>
+                        <div class="macro fat">
+                            <span class="macro-value">${food.fat}g</span>
+                            Lip
+                        </div>
+                    </div>
+                    <div style="font-size: 11px; color: var(--text-secondary); margin-top: 8px;">
+                        Pour ${food.portion}
+                    </div>
+                </div>
+            `).join('');
+
+            container.innerHTML = html;
+        }
+
+        function showStatus(message, type = 'info') {
+            const existing = document.querySelector('.status-message');
+            if (existing) existing.remove();
+
+            const div = document.createElement('div');
+            div.className = 'status-message';
+            div.textContent = message;
+            document.body.appendChild(div);
+
+            setTimeout(() => div.remove(), 3000);
+        }
+
+        // ===== EVENT LISTENERS =====
+        document.querySelectorAll('.mode-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const mode = btn.dataset.mode;
+                
+                document.querySelectorAll('.mode-btn').forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                
+                document.querySelectorAll('.view').forEach(v => v.classList.add('hidden'));
+                document.getElementById(`${mode}-view`).classList.remove('hidden');
+                
+                currentMode = mode;
+                cancelConfirmation();
+
+                if (mode === 'log-meal') {
+                    updateDailySummary();
+                } else if (mode === 'history') {
+                    refreshMealsHistory();
+                    refreshFoodDatabase();
+                }
+            });
+        });
+
+        document.querySelectorAll('.tab-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const tab = btn.dataset.tab;
+                
+                document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                
+                document.querySelectorAll('.tab-content').forEach(t => t.classList.add('hidden'));
+                document.getElementById(`${tab}-tab`).classList.remove('hidden');
+            });
+        });
+
+        document.getElementById('mic-add').addEventListener('click', () => {
+            if (!recognition) {
+                showStatus('Reconnaissance vocale non disponible', 'error');
+                return;
+            }
+
+            if (isListening) {
+                recognition.stop();
+            } else {
+                currentTranscript = '';
+                isListening = true;
+                updateMicButton();
+                recognition.start();
+            }
+        });
+
+        document.getElementById('mic-meal').addEventListener('click', () => {
+            if (!recognition) {
+                showStatus('Reconnaissance vocale non disponible', 'error');
+                return;
+            }
+
+            if (isListening) {
+                recognition.stop();
+            } else {
+                currentTranscript = '';
+                isListening = true;
+                updateMicButton();
+                recognition.start();
+            }
+        });
+
+        // ===== INITIALIZATION =====
+        window.addEventListener('load', async () => {
+            await updateDailySummary();
+            
+            // Show install prompt for standalone mode
+            if (!window.matchMedia('(display-mode: standalone)').matches) {
+                const prompt = document.createElement('div');
+                prompt.className = 'install-prompt';
+                prompt.innerHTML = `
+                    <h3>📱 Installe l'app</h3>
+                    <p>Pour une meilleure expérience, ajoute NutriVoice à ton écran d'accueil</p>
+                `;
+                document.querySelector('.content').prepend(prompt);
+            }
+        });
+    </script>
+</body>
+</html>
