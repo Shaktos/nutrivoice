@@ -600,6 +600,9 @@
         let currentTranscript = '';
         let pendingConfirmation = null;
         let recognitionTimeout = null;
+        let sessionActive = false; // New: track if voice session is active
+        let awaitingVoiceConfirmation = false; // New: waiting for yes/no
+        let silenceTimeout = null; // New: for detecting end of speech
 
         // ===== DEBUG LOGGING =====
         function logDebug(message) {
@@ -619,10 +622,32 @@
             }
         }
 
+        // ===== VOICE COMMAND DETECTION =====
+        function detectVoiceCommand(text) {
+            const lower = text.toLowerCase().trim();
+            
+            // Confirmation commands
+            if (lower.match(/\b(oui|valider?|ok|confirmer?|c'est bon|parfait)\b/)) {
+                return 'confirm';
+            }
+            
+            // Cancellation commands
+            if (lower.match(/\b(non|annuler?|recommencer?|refaire|efface)\b/)) {
+                return 'cancel';
+            }
+            
+            // End session commands
+            if (lower.match(/\b(éteindre le micro|stop écoute|arrêter?|termine|fini)\b/)) {
+                return 'end_session';
+            }
+            
+            return null;
+        }
+
         // ===== SPEECH RECOGNITION SETUP =====
         if ('webkitSpeechRecognition' in window) {
             recognition = new webkitSpeechRecognition();
-            recognition.continuous = false;
+            recognition.continuous = true; // Changed to true for continuous listening
             recognition.interimResults = true;
             recognition.lang = 'fr-FR';
 
@@ -631,15 +656,8 @@
             recognition.onstart = () => {
                 logDebug('🎤 Écoute démarrée...');
                 isListening = true;
+                sessionActive = true;
                 updateMicButton();
-                
-                // Timeout après 10 secondes si rien n'est dit
-                recognitionTimeout = setTimeout(() => {
-                    logDebug('⏱️ Timeout - arrêt automatique');
-                    if (recognition && isListening) {
-                        recognition.stop();
-                    }
-                }, 10000);
             };
 
             recognition.onaudiostart = () => {
@@ -648,6 +666,11 @@
 
             recognition.onsoundstart = () => {
                 logDebug('📢 Son capté par le micro');
+                // Clear any existing silence timeout
+                if (silenceTimeout) {
+                    clearTimeout(silenceTimeout);
+                    silenceTimeout = null;
+                }
             };
 
             recognition.onspeechstart = () => {
@@ -655,8 +678,12 @@
             };
 
             recognition.onresult = (event) => {
+                // Clear existing timeouts
                 if (recognitionTimeout) {
                     clearTimeout(recognitionTimeout);
+                }
+                if (silenceTimeout) {
+                    clearTimeout(silenceTimeout);
                 }
 
                 const transcript = Array.from(event.results)
@@ -665,33 +692,74 @@
                 
                 currentTranscript = transcript;
                 updateTranscript(transcript);
-                logDebug(`📝 Texte: "${transcript.substring(0, 50)}..."`);
+                
+                // Check if this is a final result
+                const lastResult = event.results[event.results.length - 1];
+                if (lastResult.isFinal) {
+                    logDebug(`📝 Texte final: "${transcript.substring(0, 50)}..."`);
+                    
+                    // Check for voice commands
+                    const command = detectVoiceCommand(transcript);
+                    
+                    if (command === 'end_session') {
+                        logDebug('🛑 Commande: Fin de session');
+                        endVoiceSession();
+                        return;
+                    }
+                    
+                    if (awaitingVoiceConfirmation) {
+                        if (command === 'confirm') {
+                            logDebug('✅ Commande: Confirmation');
+                            awaitingVoiceConfirmation = false;
+                            confirmAction();
+                            return;
+                        } else if (command === 'cancel') {
+                            logDebug('❌ Commande: Annulation');
+                            awaitingVoiceConfirmation = false;
+                            cancelConfirmation();
+                            return;
+                        }
+                    }
+                    
+                    // Wait for silence before processing
+                    silenceTimeout = setTimeout(() => {
+                        logDebug('⏸️ Silence détecté - traitement...');
+                        if (currentTranscript && !awaitingVoiceConfirmation) {
+                            processVoiceInput(currentTranscript);
+                        }
+                    }, 2500); // 2.5 seconds of silence
+                }
             };
 
             recognition.onspeechend = () => {
-                logDebug('🛑 Fin de parole détectée');
-            };
-
-            recognition.onaudioend = () => {
-                logDebug('🔇 Audio terminé');
+                logDebug('🔇 Fin de parole');
             };
 
             recognition.onend = () => {
-                logDebug('✅ Écoute terminée');
+                logDebug('⚠️ Reconnaissance arrêtée');
                 
                 if (recognitionTimeout) {
                     clearTimeout(recognitionTimeout);
                 }
+                if (silenceTimeout) {
+                    clearTimeout(silenceTimeout);
+                }
                 
-                isListening = false;
-                updateMicButton();
-                
-                if (currentTranscript) {
-                    logDebug('🤖 Envoi à l\'IA...');
-                    processVoiceInput(currentTranscript);
+                // Auto-restart if session is still active
+                if (sessionActive) {
+                    logDebug('🔄 Redémarrage automatique...');
+                    setTimeout(() => {
+                        if (sessionActive && recognition) {
+                            try {
+                                recognition.start();
+                            } catch (e) {
+                                logDebug('⚠️ Erreur redémarrage: ' + e.message);
+                            }
+                        }
+                    }, 100);
                 } else {
-                    logDebug('❌ Aucun texte capté');
-                    showStatus('Aucune parole détectée. Réessaie !', 'error');
+                    isListening = false;
+                    updateMicButton();
                 }
             };
 
@@ -700,6 +768,20 @@
                 
                 if (recognitionTimeout) {
                     clearTimeout(recognitionTimeout);
+                }
+                if (silenceTimeout) {
+                    clearTimeout(silenceTimeout);
+                }
+                
+                // Ignore aborted errors (happen during restarts)
+                if (event.error === 'aborted') {
+                    return;
+                }
+                
+                // Ignore no-speech errors if we're in a continuous session
+                if (event.error === 'no-speech' && sessionActive) {
+                    logDebug('💡 En attente de parole...');
+                    return;
                 }
                 
                 let errorMsg = 'Erreur de reconnaissance vocale';
@@ -712,29 +794,59 @@
                     case 'audio-capture':
                         errorMsg = 'Micro non accessible. Vérifie les permissions.';
                         logDebug('💡 Vérifie: Paramètres → Micro → Autoriser');
+                        sessionActive = false;
                         break;
                     case 'not-allowed':
                         errorMsg = 'Permission micro refusée';
                         logDebug('💡 Clique sur le cadenas → Autoriser le micro');
+                        sessionActive = false;
                         break;
                     case 'network':
                         errorMsg = 'Pas de connexion internet';
                         logDebug('💡 La reconnaissance vocale nécessite internet');
                         break;
-                    case 'aborted':
-                        errorMsg = 'Reconnaissance interrompue';
-                        break;
                     default:
                         errorMsg = `Erreur: ${event.error}`;
                 }
                 
-                showStatus(errorMsg, 'error');
-                isListening = false;
-                updateMicButton();
+                if (!sessionActive || event.error !== 'no-speech') {
+                    showStatus(errorMsg, 'error');
+                }
+                
+                if (!sessionActive) {
+                    isListening = false;
+                    updateMicButton();
+                }
             };
         } else {
             logDebug('❌ Reconnaissance vocale NON supportée');
             showStatus('Reconnaissance vocale non supportée sur ce navigateur. Utilise Chrome.', 'error');
+        }
+
+        // ===== END VOICE SESSION =====
+        function endVoiceSession() {
+            sessionActive = false;
+            awaitingVoiceConfirmation = false;
+            
+            if (recognition) {
+                try {
+                    recognition.stop();
+                } catch (e) {
+                    // Ignore errors when stopping
+                }
+            }
+            
+            if (recognitionTimeout) {
+                clearTimeout(recognitionTimeout);
+            }
+            if (silenceTimeout) {
+                clearTimeout(silenceTimeout);
+            }
+            
+            isListening = false;
+            updateMicButton();
+            showStatus('Session vocale terminée', 'success');
+            logDebug('👋 Session terminée');
         }
 
         // ===== STORAGE FUNCTIONS =====
@@ -956,6 +1068,9 @@ Réponds UNIQUEMENT avec un JSON array (pas de markdown, pas de backticks):
                             </div>
                         </div>
                     </div>
+                    <div style="text-align: center; margin-top: 16px; font-size: 12px; color: var(--accent);">
+                        🎤 Dis "OUI" pour ajouter ou "NON" pour annuler
+                    </div>
                     <div class="action-buttons">
                         <button class="btn btn-cancel" onclick="cancelConfirmation()">Annuler</button>
                         <button class="btn btn-confirm" onclick="confirmAction()">Ajouter</button>
@@ -965,6 +1080,10 @@ Réponds UNIQUEMENT avec un JSON array (pas de markdown, pas de backticks):
             
             document.getElementById('confirmation-add').innerHTML = html;
             document.getElementById('confirmation-add').classList.remove('hidden');
+            
+            awaitingVoiceConfirmation = true;
+            currentTranscript = ''; // Reset transcript
+            logDebug('⏳ En attente de confirmation vocale...');
         }
 
         function showMealConfirmation(items) {
@@ -1025,6 +1144,9 @@ Réponds UNIQUEMENT avec un JSON array (pas de markdown, pas de backticks):
                             </div>
                         </div>
                     </div>
+                    <div style="text-align: center; margin-top: 16px; font-size: 12px; color: var(--accent);">
+                        🎤 Dis "OUI" pour logger ou "NON" pour annuler
+                    </div>
                     <div class="action-buttons">
                         <button class="btn btn-cancel" onclick="cancelConfirmation()">Annuler</button>
                         <button class="btn btn-confirm" onclick="confirmAction()">Logger</button>
@@ -1034,6 +1156,10 @@ Réponds UNIQUEMENT avec un JSON array (pas de markdown, pas de backticks):
             
             document.getElementById('confirmation-meal').innerHTML = html;
             document.getElementById('confirmation-meal').classList.remove('hidden');
+            
+            awaitingVoiceConfirmation = true;
+            currentTranscript = ''; // Reset transcript
+            logDebug('⏳ En attente de confirmation vocale...');
         }
 
         async function confirmAction() {
@@ -1044,7 +1170,11 @@ Réponds UNIQUEMENT avec un JSON array (pas de markdown, pas de backticks):
                 if (success) {
                     showStatus('Aliment ajouté à la base !', 'success');
                     cancelConfirmation();
-                    refreshFoodDatabase();
+                    await refreshFoodDatabase();
+                    
+                    if (sessionActive) {
+                        logDebug('🔄 Session continue - prêt pour nouvel aliment');
+                    }
                 }
             } else if (pendingConfirmation.type === 'meal') {
                 const meal = {
@@ -1064,12 +1194,17 @@ Réponds UNIQUEMENT avec un JSON array (pas de markdown, pas de backticks):
                     cancelConfirmation();
                     await updateDailySummary();
                     await refreshMealsHistory();
+                    
+                    if (sessionActive) {
+                        logDebug('🔄 Session continue - prêt pour nouveau repas');
+                    }
                 }
             }
         }
 
         function cancelConfirmation() {
             pendingConfirmation = null;
+            awaitingVoiceConfirmation = false;
             document.getElementById('confirmation-add').classList.add('hidden');
             document.getElementById('confirmation-meal').classList.add('hidden');
             document.getElementById('transcript-add').textContent = 'Appuie sur le micro et dicte : "Toast, dans 100g : 130 calories, 5 protéines, 10 glucides, 0 lipides"';
@@ -1077,6 +1212,11 @@ Réponds UNIQUEMENT avec un JSON array (pas de markdown, pas de backticks):
             document.getElementById('transcript-meal').textContent = 'Appuie et dicte : "Ajoute 94g avocat, 4 œufs moyens, beurre 4g"';
             document.getElementById('transcript-meal').classList.remove('has-content');
             currentTranscript = '';
+            
+            if (sessionActive) {
+                logDebug('🔄 Session continue - prêt pour nouvelle commande');
+                showStatus('Annulé. Tu peux reparler.', 'info');
+            }
         }
 
         function updateTranscript(text) {
@@ -1171,6 +1311,8 @@ Réponds UNIQUEMENT avec un JSON array (pas de markdown, pas de backticks):
             const foods = await getFoodDatabase();
             const container = document.getElementById('food-database');
             
+            if (!container) return; // Not on history page
+            
             if (foods.length === 0) {
                 container.innerHTML = '<div class="empty-state">Aucun aliment dans ta base de données</div>';
                 return;
@@ -1259,13 +1401,20 @@ Réponds UNIQUEMENT avec un JSON array (pas de markdown, pas de backticks):
                 return;
             }
 
-            if (isListening) {
-                recognition.stop();
+            if (sessionActive) {
+                // Stop the session
+                endVoiceSession();
             } else {
+                // Start new session
                 currentTranscript = '';
-                isListening = true;
-                updateMicButton();
-                recognition.start();
+                try {
+                    recognition.start();
+                    logDebug('🚀 Session vocale démarrée');
+                    showStatus('Session vocale active - parle librement', 'success');
+                } catch (e) {
+                    logDebug('⚠️ Erreur démarrage: ' + e.message);
+                    showStatus('Erreur au démarrage', 'error');
+                }
             }
         });
 
@@ -1275,13 +1424,20 @@ Réponds UNIQUEMENT avec un JSON array (pas de markdown, pas de backticks):
                 return;
             }
 
-            if (isListening) {
-                recognition.stop();
+            if (sessionActive) {
+                // Stop the session
+                endVoiceSession();
             } else {
+                // Start new session
                 currentTranscript = '';
-                isListening = true;
-                updateMicButton();
-                recognition.start();
+                try {
+                    recognition.start();
+                    logDebug('🚀 Session vocale démarrée');
+                    showStatus('Session vocale active - parle librement', 'success');
+                } catch (e) {
+                    logDebug('⚠️ Erreur démarrage: ' + e.message);
+                    showStatus('Erreur au démarrage', 'error');
+                }
             }
         });
 
